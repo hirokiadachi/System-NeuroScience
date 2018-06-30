@@ -14,7 +14,7 @@ Capture the clothes you wanted to wear on the internet.<br>
 About 10 clothes are collected for each person.
 
 ## How to execute
-<h3> Training
+<h3> Training</h3>
 ```
 python3 train.py -i [dataset-path]
 ```
