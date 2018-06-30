@@ -23,4 +23,8 @@ python3 train.py -i [dataset-path]
 python3 train.py -i [single-image-path] --test 
 ```
 
-# Requrement 
+# Requirement
+python3<br>
+PIL<br>
+chainer<br>
+tqdm<br>
