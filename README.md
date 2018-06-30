@@ -13,8 +13,14 @@ However, only these are not enough, so that we take a internet.
 Capture the clothes you wanted to wear on the internet.<br>
 About 10 clothes are collected for each person.
 
-## How to execute
-<h3> Training</h3>
-```
+# How to execute
+<h3> Training</h3><br>
+```sh
 python3 train.py -i [dataset-path]
 ```
+<br>
+<h3>Testing</h3><br>
+```sh
+python3 train.py -i [single-image-path] --test 
+```
+<br>
