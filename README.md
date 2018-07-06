@@ -37,6 +37,10 @@ This network is not so deep and number of training image is only a few.<br>
 Thus, training is immediately finish and also recognition rate maybe not good.
 So when, change the network architecture and increase the dataset size.
 
+# Grad-CAM Result
+
+![grad_cam](https://user-images.githubusercontent.com/27120804/42359757-fb6d1728-811e-11e8-8ce5-c38ad5f8e8fe.png)
+[Grad-CAM Raw Code Link](https://github.com/ninhydrin/chainer-Grad-CAM)
 # Requirement
 python : 3.x.x<br>
 PIL    : 1.1.7<br>
