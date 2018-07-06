@@ -41,6 +41,8 @@ So when, change the network architecture and increase the dataset size.
 
 ![grad_cam](https://user-images.githubusercontent.com/27120804/42359757-fb6d1728-811e-11e8-8ce5-c38ad5f8e8fe.png)
 [Grad-CAM Raw Code Link](https://github.com/ninhydrin/chainer-Grad-CAM)
+
+[Grad-CAM paper Link](https://arxiv.org/pdf/1610.02391.pdf)
 # Requirement
 python : 3.x.x<br>
 PIL    : 1.1.7<br>
