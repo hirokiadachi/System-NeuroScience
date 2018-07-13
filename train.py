@@ -31,13 +31,16 @@ def configuration():
                         help='Pre-Train Model File.')
     config.add_argument('--opt', '-o', type=str, default=None,
                         help='Pre-Train Optimizer File.')
-    config.add_argument('--test', action='store_true')
+    config.add_argument('--test', '-t', choices=['single', 'multiple'],
+                        type=str)
+    config.add_argument('--dataset', '-d', choices=['clothes', 'char'],
+                        type=str, default='clothes')
 
     return config.parse_args()
 
 
 ## Make Training Dataset
-def make_dataset(dir_path):
+def make_dataset(dir_path, size=512):
     item_list = sorted(os.listdir(dir_path))[1:]
     
     for index, item in tqdm(enumerate(item_list)):
@@ -47,7 +50,7 @@ def make_dataset(dir_path):
             im_path = os.path.join(item_path, im)
             img = Image.open(im_path)
             img_rotate = img.rotate(-90)
-            img_resize = img_rotate.resize((512, 512))
+            img_resize = img_rotate.resize((size, size))
             img = np.asarray(img_resize, dtype=np.float32)
             img = img.transpose((2, 0, 1))
             img = img[np.newaxis, :, :, :]
@@ -61,10 +64,50 @@ def make_dataset(dir_path):
     train = tuple_dataset.TupleDataset(datasets, labels)
     return train
 
-def load_single_image(image_path):
+## Make handwriting analysis datasets
+def make_dataset_char(dir_path, size=128):
+    PATH = []
+    PATH.append([os.path.join(dir_path, 'adachi'), 0])
+    PATH.append([os.path.join(dir_path, 'inagaki'), 1])
+    PATH.append([os.path.join(dir_path, 'maruyama'), 2])
+    PATH.append([os.path.join(dir_path, 'onisi'), 3])
+    PATH.append([os.path.join(dir_path, 'takatori'), 4])
+    all_Data = []
+    for item in PATH:
+        char_list = os.listdir(item[0])
+        char_label = item[1]
+        for ind, im in enumerate(char_list):
+            im_path = os.path.join(item[0], im)
+            img = Image.open(im_path)
+            img_resize = img.resize((size, size))
+            img = np.asarray(img_resize, dtype=np.float32)
+            img = img.transpose((2, 0, 1))
+            all_Data.append([img, char_label])
+
+    dataset = np.random.permutation(all_Data)
+    IMG = [dataset[i][0] for i in range(len(all_Data))]
+    LBL = [dataset[i][1] for i in range(len(all_Data))]
+    threshold = np.int32(len(dataset)/8*7)
+    train = tuple_dataset.TupleDataset(IMG[0:threshold], 
+                                       LBL[0:threshold])
+    test  = tuple_dataset.TupleDataset(IMG[threshold:], 
+                                       LBL[threshold:])
+    return train, test
+            
+
+def load_single_image_clothes(image_path, size=512):
     img = Image.open(image_path)
     img_rotate = img.rotate(-90)
-    img_resize = img_rotate.resize((512, 512))
+    img_resize = img_rotate.resize((size, size))
+    img = np.asarray(img_resize, dtype=np.float32)
+    img = img.transpose((2, 0, 1))
+    img = img[np.newaxis, :, :, :]
+
+    return img
+
+def load_single_image_char(image_path, size=128):
+    img = Image.open(image_path)
+    img_resize = img.resize((size, size))
     img = np.asarray(img_resize, dtype=np.float32)
     img = img.transpose((2, 0, 1))
     img = img[np.newaxis, :, :, :]
@@ -76,7 +119,8 @@ class Layer(Chain):
     def __init__(self, ch_in, ch_out, ksize=3, stride=1, pad=1):
         w = chainer.initializers.Normal(1.0)
         super(Layer, self).__init__(
-            conv = L.Convolution2D(ch_in, ch_out, ksize=ksize, stride=stride, pad=pad, initialW=w),
+            conv = L.Convolution2D(ch_in, ch_out, ksize=ksize, 
+                                   stride=stride, pad=pad, initialW=w),
             bn   = L.BatchNormalization(ch_out),
         )
 
@@ -108,8 +152,9 @@ class Brief_CNN(Chain):
         h = x
         for i in range(5):
             h = self['c%d'%(i)](h)
-            if self.cnt % 2 == 0:
+            if i % 2 == 0:
                 h = F.max_pooling_2d(h, 2, 2)
+        self.cam = h
         h = F.relu(self.l0(h))
         out = self.l1(h)
 
@@ -159,10 +204,13 @@ def train():
     ## Parameter Information Display out
     print('===================================================')
     if args.test:
-        print('Num of Minibatch Size: 1'.format(args.batch))
+        print('Evaluation of Network')
+        print('Num of Minibatch Size: 1')
+        print('Num of Epoch         : 1')
     else:
+        print('Training a Network')
         print('Num of Minibatch Size: {}'.format(args.batch))
-    print('Num of Epoch         : {}'.format(args.epoch))
+        print('Num of Epoch         : {}'.format(args.epoch))
     if args.gpu >= 0:
         print('GPU Number           : {}'.format(args.gpu))
     else:
@@ -188,8 +236,17 @@ def train():
         print('Loading Brief CNN Optimizer from {}'.format(args.opt))
         serializers.load_npz(args.opt, optimizer)
 
-    if args.test:
-        test = load_single_image(args.img)
+    if args.test == 'single':
+        label_name = {0: 'Adachi',
+                      1: 'Inagaki',
+                      2: 'Maruyama',
+                      3: 'Onishi',
+                      4: 'Takatori'}
+
+        if args.dataset == 'char':
+            test = load_single_image_char(args.img, size=128)
+        else:
+            test = load_single_image_clothes(args.img, size=512)
         xp = model.xp
         test = xp.asarray(test, dtype=xp.float32)
         with chainer.using_config('train', False):
@@ -198,24 +255,45 @@ def train():
         prob = xp.reshape(prob, (prob.shape[1]))
         max_val_ind = xp.ndarray.argmax(prob)
         max_val = prob[max_val_ind] * 100
-        print('>>> {} : {} %'.format(max_val_ind, max_val))
-        
+        print('>>> {} : {} %'.format(label_name[int(max_val_ind)], max_val))
+
     else:
-        train = make_dataset(args.img)
-        train_iter = iterators.SerialIterator(train, batch_size=args.batch)
-        log_filename = 'log_train'
-        updater = CNNUpdater(net_model=model,
-                             iterator={'main': train_iter},
-                             optimizer={'optimizer': optimizer},
-                             device=args.gpu)
+        if args.dataset == 'clothes':
+            train = make_dataset(args.img)
+        else:
+            train, test = make_dataset_char(args.img, size=128)
+        train_iter = iterators.SerialIterator(train, 
+                                              batch_size=args.batch)
+        test_iter = iterators.SerialIterator(test, batch_size=1)
+        log_filename = 'log'
+        if args.test == 'multiple':
+            ## network evaluate with multiple data
+            updater = CNNUpdater(net_model=model,
+                                 iterator={'main': test_iter},
+                                 optimizer={'optimizer': optimizer},
+                                 device=args.gpu)
+            trainer = training.Trainer(updater, (1, 'epoch'), 
+                                       out='results')
+        else:
+            ## training network
+            updater = CNNUpdater(net_model=model,
+                                 iterator={'main': train_iter},
+                                 optimizer={'optimizer': optimizer},
+                                 device=args.gpu)
+            trainer = training.Trainer(updater, (args.epoch, 'epoch'),
+                                       out='results')
+            trainer.extend(extensions.snapshot_object(model, 'model'),
+                           trigger=(10, 'epoch'))
+            trainer.extend(extensions.snapshot_object(
+                           optimizer, 'optimizer'), 
+                           trigger=(10, 'epoch'))
 
-        trainer = training.Trainer(updater, (args.epoch, 'epoch'), out='results')
 
-
-        trainer.extend(extensions.LogReport(trigger=(1, 'epoch'), log_name=log_filename))
-        trainer.extend(extensions.PrintReport(['epoch', 'Loss', 'Acc']))
-        trainer.extend(extensions.snapshot_object(model, 'model'), trigger=(10, 'epoch'))
-        trainer.extend(extensions.snapshot_object(optimizer, 'optimizer'), trigger=(10, 'epoch'))
+        trainer.extend(extensions.LogReport(trigger=(1, 'epoch'), 
+                                            log_name=log_filename))
+        trainer.extend(extensions.PrintReport(['epoch', 
+                                               'Loss', 
+                                               'Acc']))
         trainer.extend(extensions.ProgressBar(update_interval=1))
 
         trainer.run()
