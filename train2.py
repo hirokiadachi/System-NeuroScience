@@ -81,7 +81,6 @@ def make_dataset_char(dir_path, size=128):
             img = Image.open(im_path)
             img_resize = img.resize((size, size))
             img = np.asarray(img_resize, dtype=np.float32)
-            print(img.shape)
             img = img.transpose((2, 0, 1))
             all_Data.append([img, char_label])
 
